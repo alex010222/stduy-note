@@ -1,0 +1,1046 @@
+# 04_pod控制器详解
+
+
+
+# 1.控制器作用
+
+```
+1. pod类型的资源，如果直接删除，不会重建
+
+2. 控制器可以帮助用户监视、并且保证相应的节点上始终运行着用户定义好的pod副本数在运行。
+
+5个后端pod，用控制器，能一直保证就是5个
+
+3. 甚至pod超过、或者低于用户期望、定义好的pod副本数，控制器都会创建、删除pod副本数量。
+
+副本控制器。
+
+
+```
+
+
+
+# 2.控制器类型
+
+```
+了解即可，不会直接用它，但是底层是它。
+
+1. RS控制器，按照用户期望的副本数量，创建POD。
+1. 用户写yaml，。定义RS控制器，去定义pod模板，pod按照这个模板去运行
+
+
+ReplicationSet
+
+
+kind: pod
+
+kind: r\
+
+
+
+1.  deployment控制器
+deployemnt控制器
+↓
+RS控制器
+↓
+POD运行副本
+
+
+
+
+- 通过控制RS控制器来始终确保POD的正确数量。 副本数： 5
+- 支持滚动更新、回滚、回滚默认保留10个版本
+- 提供声名式配置，支持动态修改
+-管理无状态应用，最理想的控制器，nginx+wordpress
+- node节点可能会是0个、多个POD
+
+
+
+
+2. DaemonSet
+一个节点只运行、且只有一个，必须运行的POD
+
+
+
+
+```
+
+
+
+# 3.创建ReplicationSet控制器
+
+![1663575282278](pic/1663575282278.png)
+
+
+
+```
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n kube-system  get all
+
+
+
+```
+
+
+
+
+
+## 创建RS控制器
+
+RS控制器就是个模板，定义一组POD的信息标准
+
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-rs
+  namespace: linux0224
+
+spec:
+  # 按你的实际情况修改副本数
+  replicas: 4
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      name: nginx-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx-containers
+        image: nginx:1.14.0
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 80
+```
+
+
+
+
+
+
+
+## 查看POD，基于标签选择器
+
+![1663575619946](pic/1663575619946.png)
+
+
+
+```
+看完rs，副本集，副本控制器
+
+创建rs控制器
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl create -f rs-nginx-1.yml 
+
+
+查看rs控制器
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 get rs -owide
+NAME       DESIRED   CURRENT   READY   AGE   CONTAINERS         IMAGES         SELECTOR
+nginx-rs   4         4         4       34s   nginx-containers   nginx:1.14.0   app=nginx
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+查看rs控制器，管理的4个pod
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 get pods -l app=nginx -owide
+
+
+============查看rs是如何保障副本数============================
+
+[root@k8s-master-10 ~]#kubectl -n linux0224 get rs -w -owide
+NAME       DESIRED   CURRENT   READY   AGE     CONTAINERS         IMAGES         SELECTOR
+nginx-rs   4         4         4       7m24s   nginx-containers   nginx:1.14.0   app=nginx
+
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 delete pods -l app=nginx
+pod "nginx-rs-fjbd9" deleted
+pod "nginx-rs-jrj75" deleted
+pod "nginx-rs-rbsbn" deleted
+pod "nginx-rs-zbcm2" deleted
+
+
+
+
+
+
+====================查看pod的详细信息，和rs的关系======================
+
+
+# rs 详细描述
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 describe rs nginx-rs
+
+
+# pod详细描述
+
+
+
+
+
+```
+
+
+
+![1663576254882](pic/1663576254882.png)
+
+
+
+
+
+查看pod和rs的关系
+
+![1663576381331](pic/1663576381331.png)
+
+
+
+
+
+## 删除POD试试？
+
+
+
+再查查最新的POD
+
+```
+rs控制器，根据期望状态，4个pod，就会一直保障4个pod再运行。
+
+```
+
+
+
+## 不懂rs字段的话，如何看
+
+![1663576494362](pic/1663576494362.png)
+
+```
+
+```
+
+
+
+
+
+
+
+## 修改RS控制器yaml
+
+修改副本数、修改资源配置
+
+```
+修改yaml
+
+  # 按你的实际情况修改副本数
+  replicas: 0
+
+
+[root@k8s-master-10 /all-k8s-yml/day5]#cat rs-nginx-1.yml 
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-rs
+  namespace: linux0224
+
+spec:
+  # 按你的实际情况修改副本数
+  replicas: 6
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      name: nginx-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx-containers
+        image: nginx:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 80
+
+
+# 更新rs资源，基于yaml
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl apply -f rs-nginx-1.yml 
+replicaset.apps/nginx-rs configured
+
+
+
+
+```
+
+![1663576806874](pic/1663576806874.png)
+
+
+
+
+
+### 查看RS控制器更新结果
+
+![1663576976790](pic/1663576976790.png)
+
+
+
+
+
+
+
+
+
+
+
+## 编辑RS控制器资源
+
+```
+# 编辑rs资源
+kubectl -n linux0224 edit rs nginx-rs 
+
+
+# label不可变
+# 副本数，pod模板的，镜像版本可修改
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224  edit rs nginx-rs 
+replicaset.apps/nginx-rs edited
+
+
+# 查看结果
+rs信息
+pod数量，内容
+
+
+
+#保存退出
+
+```
+
+
+
+### 查看rs控制器结果
+
+
+
+
+
+
+
+## ====动态、扩、缩容POD=====
+
+来自于nginx负载均衡的架构，理念，动态扩容，缩容后端节点
+
+
+
+![1663579283215](pic/1663579283215.png)
+
+```
+# 动态修改rs副本集，的副本数，扩容到7个
+# 秒杀活动来，后端多一点
+# k8s能不能实现，基于流量的大小？Node节点的负载动态，自动的扩容》缩容？
+# 成本最优利用率
+# HPA
+
+
+
+  
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 scale --replicas=7 rs nginx-rs
+replicaset.apps/nginx-rs scaled
+
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 get rs nginx-rs -oyaml 
+
+
+
+# 缩容
+# 秒杀活动结束，机器负载全部下去了，pod数也没必要这么多了。
+
+kubectl -n linux0224 scale --replicas=2 rs nginx-rs
+
+
+# 获取当前rs资源的yaml
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl -n linux0224 get rs nginx-rs -oyaml
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+## 获取k8s运行中资源的yaml信息
+
+
+
+
+
+# 4.Deployment控制器
+
+## Deployment是什么
+
+![1663579731229](pic/1663579731229.png)
+
+
+
+## yaml
+
+https://kubernetes.io/zh-cn/docs/concepts/workloads/controllers/deployment/#label-selector-updates
+
+从这个定义中可以看到
+
+```
+当前集群获取
+
+RS资源 yaml
+deploy 资源yaml
+xxx其他类型
+
+kubectl -n kube-system get deploy coredns -o yaml # 拿到资源写法
+
+
+
+
+
+```
+
+![1663580028834](pic/1663580028834.png)
+
+
+
+
+
+### 查看deployment字段帮助
+
+
+
+## 创建资源清单配置
+
+将上面Deployment的定义保存到deployment.yaml文件中，使用kubectl创建这个Deployment。
+
+使用kubectl get查看Deployment和Pod，可以看到**READY**值为2/2，前一个2表示当前有2个Pod运行，后一个2表示期望有2个Pod，**AVAILABLE**为2表示有2个Pod是可用的。
+
+```
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get deployments.apps  -owide
+NAME               READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS         IMAGES         SELECTOR
+nginx-deployment   2/2     2            2           45s   nginx-containers   nginx:1.14.0   app=nginx
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get rs
+NAME                          DESIRED   CURRENT   READY   AGE
+nginx-deployment-6f7886b6db   2         2         2       71s
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l app=nginx
+NAME                                READY   STATUS    RESTARTS   AGE
+nginx-deployment-6f7886b6db-swdv8   1/1     Running   0          87s
+nginx-deployment-6f7886b6db-vggjb   1/1     Running   0          87s
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+```
+
+![1663580190225](pic/1663580190225.png)
+
+
+
+## 图解POD描述信息
+
+pod，和谁有关？
+
+
+
+```
+先看pod和什么控制器有关
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl describe pods nginx-deployment-6f7886b6db-swdv8 
+
+
+
+再看rs控制器的信息
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl describe rs nginx-deployment-6f7886b6db 
+
+
+
+
+```
+
+
+
+![1663580319796](pic/1663580319796.png)
+
+
+
+
+
+
+
+
+
+## 图解Deployment描述信息
+
+![1663580426016](pic/1663580426016.png)
+
+
+
+
+
+## deployment如何控制pod
+
+![1663580431283](pic/1663580431283.png)
+
+```
+deploy
+
+↓
+
+rs
+
+↓
+
+pod
+
+```
+
+
+
+
+
+
+
+## deployment和RS和pod关系
+
+```
+deploy
+
+↓
+
+rs
+
+↓
+
+pod
+
+
+describe
+
+```
+
+
+
+## deploy保障pod的原理
+
+```
+rs控制器
+
+
+```
+
+![1663580564115](pic/1663580564115.png)
+
+
+
+
+
+## pod版本更新⭐️⭐️
+
+```
+
+
+RS控制器，修改副本数
+
+
+1.  edit编辑RS资源
+
+2.   kubectl  scale  --replicas=xxx   rs  rs名
+
+
+
+
+
+
+==========================================
+
+# 查看deployment，默认的 蓝绿更新策略，滚动更新策略。
+
+#  更新 控制器，镜像，的方案
+
+
+1， edit 编辑deployment资源
+
+
+2.  deployment提供了 修改镜像版本 参数   kubectl  set image
+
+
+# 111111
+
+
+
+
+```
+
+
+
+![1663581646890](pic/1663581646890.png)
+
+
+
+
+
+### 查看deployment更新事件
+
+
+
+### 查看rs更新事件
+
+
+
+
+
+### 查看pod更新事件
+
+
+
+### deployment更新镜像原理图
+
+```
+默认是滚动更新，逐步创建新pod、然后删除旧pod.
+```
+
+![1663581655031](pic/1663581655031.png)
+
+
+
+
+
+### =====查看滚动更新状态=====
+
+
+
+
+
+### 蓝绿更新原理
+
+
+
+# 验证，滚动更新的结果
+
+```
+预计的是，新的rs、新的pod副本
+
+deploy
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get deployments.apps  -o wide
+NAME               READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS         IMAGES         SELECTOR
+nginx-deployment   2/2     2            2           27m   nginx-containers   nginx:1.21.1   app=nginx
+
+
+
+
+rs
+
+
+
+
+pod
+
+
+## 查看更新结果全流程
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l app=nginx --show-labels 
+NAME                               READY   STATUS    RESTARTS   AGE   LABELS
+nginx-deployment-899db655c-bjcxv   1/1     Running   0          10m   app=nginx,pod-template-hash=899db655c
+nginx-deployment-899db655c-jzq87   1/1     Running   0          10m   app=nginx,pod-template-hash=899db655c
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l  pod-template-hash=899db655c     --show-labels 
+NAME                               READY   STATUS    RESTARTS   AGE   LABELS
+nginx-deployment-899db655c-bjcxv   1/1     Running   0          10m   app=nginx,pod-template-hash=899db655c
+nginx-deployment-899db655c-jzq87   1/1     Running   0          10m   app=nginx,pod-template-hash=899db655c
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]## 111111
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l  pod-template-hash=899db655c     --show-labels  -owide
+NAME                               READY   STATUS    RESTARTS   AGE   IP          NODE            NOMINATED NODE   READINESS GATES   LABELS
+nginx-deployment-899db655c-bjcxv   1/1     Running   0          11m   10.2.1.91   k8s-node-11     <none>           <none>            app=nginx,pod-template-hash=899db655c
+nginx-deployment-899db655c-jzq87   1/1     Running   0          10m   10.2.0.25   k8s-master-10   <none>           <none>            app=nginx,pod-template-hash=899db655c
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#curl 10.2.1.91 -I
+HTTP/1.1 200 OK
+Server: nginx/1.21.1
+Date: Mon, 19 Sep 2022 10:04:10 GMT
+Content-Type: text/html
+Content-Length: 612
+Last-Modified: Tue, 06 Jul 2021 14:59:17 GMT
+Connection: keep-alive
+ETag: "60e46fc5-264"
+Accept-Ranges: bytes
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#curl 10.2.0.25 -I
+HTTP/1.1 200 OK
+Server: nginx/1.21.1
+Date: Mon, 19 Sep 2022 10:04:16 GMT
+Content-Type: text/html
+Content-Length: 612
+Last-Modified: Tue, 06 Jul 2021 14:59:17 GMT
+Connection: keep-alive
+ETag: "60e46fc5-264"
+Accept-Ranges: bytes
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+```
+
+
+
+# =======================================
+
+
+
+### 其他更新镜像命令set image
+
+```
+# 先基于deployment，查询出具体副本集，管理的容器是谁
+
+
+[root@k8s-master-10 /all-k8s-yml/day5]## kubectl set image deploy nginx-deployment nginx-containers=nginx:1.14.1
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]## 这个命令，和上述，直接edit 编辑 deploy里面的镜像版本，一个意思，同样是，滚动更新，逐 步，下线旧rs的副本，下线一个，上新一个新rs的副本，滚动更新，。听懂1111
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]## 最新的，pod副本，nginx
+[root@k8s-master-10 /all-k8s-yml/day5]## 最新的，pod副本，nginx-deployment-746xxxx
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pod -l app=nginx -owide
+NAME                               READY   STATUS    RESTARTS   AGE    IP          NODE            NOMINATED NODE   READINESS GATES
+nginx-deployment-7464f7f89-57cl2   1/1     Running   0          101s   10.2.1.92   k8s-node-11     <none>           <none>
+nginx-deployment-7464f7f89-sc5ls   1/1     Running   0          100s   10.2.0.26   k8s-master-10   <none>           <none>
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+
+```
+
+
+
+### 依然是滚动更新过程
+
+
+
+### deployment回滚原理
+
+因为rs控制器还在，数据还保留着，rs定义的其他版本的，pod镜像信息等，模板，都在。
+
+
+
+
+
+![1663582480208](pic/1663582480208.png)
+
+
+
+## ============pod回滚上一个版本=======
+
+```
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout undo deployment nginx-deployment 
+deployment.apps/nginx-deployment rolled back
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout undo deployment nginx-deployment 
+deployment.apps/nginx-deployment rolled back
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout undo deployment nginx-deployment 
+deployment.apps/nginx-deployment rolled back
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+# 反复执行，上一次更新的 两个版本之间，交替
+
+[root@k8s-master-10 ~]#kubectl get rs -owide   -w  # 查看结果
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+## pod指定版本记录回滚⭐️⭐️
+
+```
+1. 创建控制器，且记录版本
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get deployments.apps 
+No resources found in default namespace.
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl create -f last-deploy-nginx.yml --record
+deployment.apps/last-nginx-deployment created
+
+
+2. 查看关于回滚命令的帮助，记住3个
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout history deployment  last-nginx-deployment 
+deployment.apps/last-nginx-deployment 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=last-deploy-nginx.yml --record=true
+
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout status  deployment  last-nginx-deployment 
+deployment "last-nginx-deployment" successfully rolled out
+
+
+
+3. 查看deploy控制器详细信息
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl describe deployments.apps last-nginx-deployment 
+Name:                   last-nginx-deployment
+Namespace:              default
+CreationTimestamp:      Mon, 19 Sep 2022 18:23:46 +0800
+Labels:                 <none>
+Annotations:            deployment.kubernetes.io/revision: 1
+                        kubernetes.io/change-cause: kubectl create --filename=last-deploy-nginx.yml --record=true
+Selector:               myenv=dev
+
+
+
+
+4. 更新控制器，更新应用的版本，且做好记录
+
+edit
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl edit deployments.apps last-nginx-deployment 
+Edit cancelled, no changes made.
+
+
+
+set image
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl set image deploy last-nginx-deployment    last-nginx-containers=nginx:1.15.1
+deployment.apps/last-nginx-deployment image updated
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get rs -owide
+NAME                               DESIRED   CURRENT   READY   AGE     CONTAINERS              IMAGES         SELECTOR
+last-nginx-deployment-559fbc8954   0         0         0       5m54s   last-nginx-containers   nginx:1.14.0   myenv=dev,pod-template-hash=559fbc8954
+last-nginx-deployment-68679fc446   2         2         2       8s      last-nginx-containers   nginx:1.15.1   myenv=dev,pod-template-hash=68679fc446
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+5.查询deployment资源的历史版本记录
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout history deployment last-nginx-deployment 
+deployment.apps/last-nginx-deployment 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=last-deploy-nginx.yml --record=true
+2         kubectl create --filename=last-deploy-nginx.yml --record=true
+
+
+
+6.查看具体版本的，镜像信息
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout history deployment last-nginx-deployment --revision=2
+
+7. 再更新一版
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl set image deploy last-nginx-deployment   last-nginx-containers=nginx:1.17.1
+deployment.apps/last-nginx-deployment image updated
+
+
+
+
+
+8.再一次更新成功，查看状态
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout status deployment last-nginx-deployment 
+Waiting for deployment "last-nginx-deployment" rollout to finish: 1 out of 2 new replicas have been updated...
+
+
+Waiting for deployment "last-nginx-deployment" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "last-nginx-deployment" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "last-nginx-deployment" rollout to finish: 1 old replicas are pending termination...
+
+Waiting for deployment "last-nginx-deployment" rollout to finish: 1 old replicas are pending termination...
+deployment "last-nginx-deployment" successfully rolled out
+
+9. 查看所有版本的历史记录
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout history deployment last-nginx-deployment 
+deployment.apps/last-nginx-deployment 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=last-deploy-nginx.yml --record=true
+2         kubectl create --filename=last-deploy-nginx.yml --record=true
+3         kubectl create --filename=last-deploy-nginx.yml --record=true
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l myenv=dev
+NAME                                     READY   STATUS    RESTARTS   AGE
+last-nginx-deployment-7d8f89d9b8-6ckdf   1/1     Running   0          75s
+last-nginx-deployment-7d8f89d9b8-cqrvf   1/1     Running   0          96s
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -l myenv=dev -owide
+NAME                                     READY   STATUS    RESTARTS   AGE   IP           NODE            NOMINATED NODE   READINESS GATES
+last-nginx-deployment-7d8f89d9b8-6ckdf   1/1     Running   0          77s   10.2.0.34    k8s-master-10   <none>           <none>
+last-nginx-deployment-7d8f89d9b8-cqrvf   1/1     Running   0          98s   10.2.1.100   k8s-node-11     <none>           <none>
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#curl -I 10.2.1.100 
+HTTP/1.1 200 OK
+Server: nginx/1.17.1
+Date: Mon, 19 Sep 2022 10:36:07 GMT
+Content-Type: text/html
+Content-Length: 612
+Last-Modified: Tue, 25 Jun 2019 12:19:45 GMT
+Connection: keep-alive
+ETag: "5d121161-264"
+Accept-Ranges: bytes
+
+[root@k8s-master-10 /all-k8s-yml/day5]## 11111
+
+
+
+10.回到上一个版本
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout undo deployment last-nginx-deployment 
+deployment.apps/last-nginx-deployment rolled back
+
+
+11.回到一个制定的版本
+
+
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout undo  deployment last-nginx-deployment --to-revision=1
+deployment.apps/last-nginx-deployment rolled back
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl rollout status deployment last-nginx-deployment 
+deployment "last-nginx-deployment" successfully rolled out
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get rs -owide 
+NAME                               DESIRED   CURRENT   READY   AGE     CONTAINERS              IMAGES         SELECTOR
+last-nginx-deployment-559fbc8954   2         2         2       16m     last-nginx-containers   nginx:1.14.0   myenv=dev,pod-template-hash=559fbc8954
+last-nginx-deployment-68679fc446   0         0         0       10m     last-nginx-containers   nginx:1.15.1   myenv=dev,pod-template-hash=68679fc446
+last-nginx-deployment-7d8f89d9b8   0         0         0       5m34s   last-nginx-containers   nginx:1.17.1   myenv=dev,pod-template-hash=7d8f89d9b8
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#kubectl get pods -owide 
+NAME                                     READY   STATUS    RESTARTS   AGE     IP           NODE            NOMINATED NODE   READINESS GATES
+last-nginx-deployment-559fbc8954-dkm6l   1/1     Running   0          30s     10.2.0.36    k8s-master-10   <none>           <none>
+last-nginx-deployment-559fbc8954-wp5wk   1/1     Running   0          31s     10.2.1.102   k8s-node-11     <none>           <none>
+liveness-pod                             1/1     Running   0          6h18m   10.2.2.108   k8s-node-12     <none>           <none>
+my-flask-redis-pod                       2/2     Running   0          3d1h    10.2.1.78    k8s-node-11     <none>           <none>
+nginx-hook                               1/1     Running   2          7h11m   10.2.2.104   k8s-node-12     <none>           <none>
+readiness-http-pod                       1/1     Running   0          5h32m   10.2.2.111   k8s-node-12     <none>           <none>
+readiness-http-pod-66666666666           1/1     Running   0          5h15m   10.2.2.113   k8s-node-12     <none>           <none>
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#curl -I 10.2.1.102
+HTTP/1.1 200 OK
+Server: nginx/1.14.0
+Date: Mon, 19 Sep 2022 10:40:19 GMT
+Content-Type: text/html
+Content-Length: 612
+Last-Modified: Tue, 17 Apr 2018 13:46:53 GMT
+Connection: keep-alive
+ETag: "5ad5facd-264"
+Accept-Ranges: bytes
+
+[root@k8s-master-10 /all-k8s-yml/day5]## 散会，辛苦了同志们。。明天见。
+[root@k8s-master-10 /all-k8s-yml/day5]## 111111
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+[root@k8s-master-10 /all-k8s-yml/day5]#
+
+
+
+
+
+```
+
+
+
+java 
+
+jdk 1.8   环境部署，宿主机，容器化部署，dockerfile jdk环境
+
+```
+修改配置
+
+java --Xmen=500
+限制过java启动资源使用率的 参数，并发参数设置
+
+
+
+====================================================================
+基本都是开发提供好的额。。
+
+
+```
+
+
+
+
+
+
+
+# 5.DaemonSet控制器,
+
+DaemonSet是这样一种对象（守护进程），它在集群的每个节点上运行一个Pod，且保证只有一个Pod，这非常适合一些系统层面的应用，例如日志收集、资源监控等，这类应用需要每个节点都运行，且不需要太多实例，一个比较好的例子就是Kubernetes的kube-proxy。
+
+> DaemonSet跟节点相关，如果节点异常，也不会在其他节点重新创建。
+
+
+
+## yaml示例
+
+
+
+## 创建ds控制器
+
+
+
+### 给机器加上标签
+
+
+
+### 基于标签选择node
+
+
+
+### 再加一个节点
+
+
+
+### 删除ds下的pod
+
+
+
+
+
+
+
+
+
+
+
